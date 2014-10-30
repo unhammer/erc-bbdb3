@@ -1,12 +1,12 @@
 ;;; erc-bbdb.el --- Integrating the BBDB into ERC
 
-;; Copyright (C) 2001, 2002, 2004, 2005, 2006, 2007
-;;   2008 Free Software Foundation, Inc.
+;; Copyright (C) 2001, 2002, 2004, 2005, 2006, 2007, 2008, 2014 Free
+;; Software Foundation, Inc.
 
 ;; Author: Andreas Fuchs <asf@void.at>
 ;; Maintainer: Mario Lang <mlang@delysid.org>
 
-;; This file is part of GNU Emacs.
+;; This file is not part of GNU Emacs.
 
 ;; GNU Emacs is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
