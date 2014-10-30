@@ -48,8 +48,6 @@
 (require 'erc)
 (require 'bbdb)
 (require 'bbdb-com)
-(require 'bbdb-gui)
-(require 'bbdb-hooks)
 
 (defgroup erc-bbdb nil
   "Variables related to BBDB usage."
@@ -104,6 +102,11 @@ If set to nil, never pop up a BBDD buffer."
   :group 'erc-bbdb
   :type 'symbol)
 
+(defcustom erc-bbdb-finger-host-field 'finger-host
+  "Internal field used to store IRC finger/hostname"
+  :group 'erc-bbdb
+  :type 'symbol)
+
 (defcustom erc-bbdb-bitlbee-name-field 'bitlbee-name
   "The notes field name to use for annotating bitlbee displayed name.
 This is the name that a bitlbee (AIM/MSN/ICQ) contact provides as
@@ -121,27 +124,33 @@ their \"displayed name\"."
   :group 'erc-bbdb
   :type 'boolean)
 
+(defun erc-bbdb-search (field regexp)
+  (bbdb-search (bbdb-records) nil nil nil
+	       (cons field regexp)))
+
 (defun erc-bbdb-search-name-and-create (create-p name nick finger-host silent)
-  (let* ((ircnick (cons erc-bbdb-irc-nick-field (concat "^"
-							(regexp-quote nick))))
-	 (finger (cons bbdb-finger-host-field (regexp-quote finger-host)))
-	 (record (or (bbdb-search (bbdb-records) nil nil nil ircnick)
-		     (and name (bbdb-search-simple name nil))
-		     (bbdb-search (bbdb-records) nil nil nil finger)
-		     (unless silent
-		       (bbdb-completing-read-one-record
-			"Merge using record of (C-g to skip, RET for new): "))
-		     (when create-p
-		       (bbdb-create-internal (or name
-						 "John Doe")
-					     nil nil nil nil nil)))))
+  (let* ((ircnick (concat "\\(^\\|, \\)" (regexp-quote nick)))
+	 (finger (regexp-quote finger-host))
+	 (record (or (erc-bbdb-search erc-bbdb-irc-nick-field ircnick)
+		     (and name (bbdb-search (bbdb-records) name))
+		     (erc-bbdb-search erc-bbdb-finger-host-field finger)
+		     ;; TODO:
+		     ;; (unless silent
+		     ;;   (bbdb-completing-read-one-record
+		     ;; 	"Merge using record of (C-g to skip, RET for new): "))
+		     ;; (when create-p
+		     ;;   (bbdb-create-internal (or name
+		     ;; 				 "John Doe")
+		     ;; 			     nil nil nil nil nil))
+		     )))
     ;; sometimes, the record will be a list. I don't know why.
     (if (listp record)
 	(car record)
       record)))
 
 (defun erc-bbdb-show-entry (record channel proc)
-  (let ((bbdb-display-layout (bbdb-grovel-elide-arg erc-bbdb-elide-display))
+  (let (;; TODO:
+	;;(bbdb-display-layout (bbdb-grovel-elide-arg erc-bbdb-elide-display))
 	(bbdb-electric-p erc-bbdb-electric-p))
     (when (and record (or (eq erc-bbdb-popup-type t)
 			  (and (eq erc-bbdb-popup-type 'visible)
@@ -156,13 +165,13 @@ their \"displayed name\"."
   (let ((record (erc-bbdb-search-name-and-create
 		 create-p nil nick finger-host silent))) ;; don't search for a name
     (when record
-      (bbdb-annotate-notes record (or new-nick nick) erc-bbdb-irc-nick-field)
-      (bbdb-annotate-notes record finger-host bbdb-finger-host-field)
+      (bbdb-annotate-record record (or new-nick nick) erc-bbdb-irc-nick-field)
+      (bbdb-annotate-record record finger-host erc-bbdb-finger-host-field)
       (and name
-	   (bbdb-annotate-notes record name erc-bbdb-bitlbee-name-field t))
+	   (bbdb-annotate-record record name erc-bbdb-bitlbee-name-field t))
       (and chan
 	   (not (eq chan t))
-	   (bbdb-annotate-notes record chan erc-bbdb-irc-channel-field))
+	   (bbdb-annotate-record record chan erc-bbdb-irc-channel-field))
       (erc-bbdb-highlight-record record)
       (erc-bbdb-show-entry record chan proc))))
 
@@ -220,16 +229,15 @@ counterparts `erc-pals', `erc-dangerous-hosts' and `erc-fools'."
     (mapcar 'erc-bbdb-highlight-record matching-records)))
 
 (defun erc-bbdb-highlight-record (record)
-  (let* ((notes (bbdb-record-raw-notes record))
-	 (highlight-field (assoc erc-bbdb-irc-highlight-field notes))
-	 (nick-field      (assoc erc-bbdb-irc-nick-field notes)))
-    (if (and highlight-field
-	     nick-field)
-	(let ((highlight-types (split-string (cdr highlight-field)
-					     bbdb-notes-default-separator))
-	      (nick-names (split-string (cdr nick-field)
+  (let* ((highlight (bbdb-record-field record erc-bbdb-irc-highlight-field))
+	 (nicks     (bbdb-record-field record erc-bbdb-irc-nick-field)))
+    (if (and highlight
+	     nicks)
+	(let ((highlight-types (split-string highlight
+					     (car bbdb-default-separator)))
+	      (nick-names (split-string nicks
 					(concat "\\(\n\\|"
-						bbdb-notes-default-separator
+						(car bbdb-default-separator)
 						"\\)"))))
 	  (mapcar
 	   (lambda (highlight-type)
